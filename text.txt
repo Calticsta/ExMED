@@ -23,4 +23,5 @@ ExMED System is a web-based medical management system developed using PHP, HTML,
 6. The system will be ready for use.
 
 ## Author
-Caltic
+GOOBI YAHAYA 
+2024ITBDAY1446G
