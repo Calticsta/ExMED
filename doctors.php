@@ -1,456 +1,447 @@
-<?php
-// doctors.php - Doctor dashboard content
-?>
-<script>
-// ==================== DOCTOR DASHBOARD FUNCTIONS ====================
-function initializeDoctorDashboard() {
-    console.log("Initializing Doctor Dashboard for:", currentUser.name);
-    populateDoctorPatients();
-    renderDoctorAppointments();
-    populatePrescribeSelects();
-    populateDiagnoseSelects();
-    populateLabSelects();
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Doctor Dashboard - ExMed</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+  .dash-header { background: linear-gradient(135deg, #28a745, #1e7e34); color: white; padding: 25px; border-radius: 16px 16px 0 0; }
+  .nav-link { color: #28a745 !important; font-weight: 600; padding: 10px 20px !important; transition: all 0.3s ease; }
+  .nav-link:hover { transform: translateY(-2px); }
+  .nav-link.active { background: #28a745 !important; color: white !important; border-radius: 12px; }
+  .record-item { cursor: pointer; transition: all 0.3s ease; border-left: 4px solid transparent; }
+  .record-item:hover { background-color: #e8f5e9; border-left-color: #28a745; transform: translateX(5px); }
+  .appointment-card { border-left: 4px solid #28a745; transition: all 0.3s ease; }
+  .appointment-card:hover { transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+  .patient-card { cursor: pointer; transition: all 0.3s ease; }
+  .patient-card:hover { transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); background-color: #f8f9fa; }
+  .message-bubble-sent { background: #28a745; color: white; border-radius: 18px 18px 4px 18px; padding: 10px 15px; display: inline-block; max-width: 80%; }
+  .message-bubble-received { background: #e9ecef; color: #333; border-radius: 18px 18px 18px 4px; padding: 10px 15px; display: inline-block; max-width: 80%; }
+  .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+  .status-pending { background: #ffc107; color: #856404; }
+  .status-confirmed { background: #28a745; color: white; }
+  .status-completed { background: #17a2b8; color: white; }
+  .status-cancelled { background: #dc3545; color: white; }
+  .home-card { cursor: pointer; transition: all 0.3s ease; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+  .home-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+  .home-card .btn { transition: all 0.3s ease; }
+  .home-card:hover .btn { transform: scale(1.05); }
+  .modal-content { border-radius: 16px; }
+  .btn-action { margin: 2px; }
+  .loading { text-align: center; padding: 20px; color: #6c757d; }
+  .search-box { position: relative; }
+  .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #6c757d; }
+  .search-box input { padding-left: 35px; }
+  .list-card { margin-bottom: 20px; border-radius: 12px; overflow: hidden; }
+  .list-card-header { background: linear-gradient(135deg, #28a745, #1e7e34); color: white; padding: 12px 20px; font-weight: 600; }
+  .list-card-body { max-height: 400px; overflow-y: auto; }
+  .list-item { border-left: 3px solid #28a745; margin-bottom: 10px; transition: all 0.2s ease; }
+  .list-item:hover { background-color: #f8f9fa; transform: translateX(3px); }
+  .conversation-item { cursor: pointer; transition: all 0.2s ease; border-left: 3px solid transparent; }
+  .conversation-item:hover { background-color: #e8f5e9; border-left-color: #28a745; transform: translateX(3px); }
+  .conversation-active { background-color: #e8f5e9; border-left-color: #28a745; }
+  .unread-badge { background: #dc3545; color: white; border-radius: 10px; padding: 2px 8px; font-size: 0.7rem; margin-left: 5px; }
+  .patient-select-card { cursor: pointer; transition: all 0.2s ease; }
+  .patient-select-card:hover { background-color: #e8f5e9; transform: translateX(5px); }
+  .btn-pdf { background: #dc3545; color: white; border: none; }
+  .btn-pdf:hover { background: #bb2d3b; color: white; }
+</style>
+</head>
+<body>
 
-async function populateDoctorPatients() {
-    const list = document.getElementById('doctorPatientsList');
-    if (!list) return;
-    
-    const result = await apiCall('get_doctor_patients', { email: currentUser.email });
-    const patients = result.patients || [];
-    
-    if (patients.length === 0) {
-        list.innerHTML = '<div class="col-12"><p class="text-muted">No patients assigned yet.</p></div>';
-        return;
-    }
-    
-    list.innerHTML = patients.map(p => `
+<div class="container-fluid mt-3">
+  <div class="dash-header text-center mb-4">
+    <h2><i class="fas fa-stethoscope me-2"></i>ExMed Doctor Portal</h2>
+    <p class="mb-0">Welcome, Dr. <?php echo htmlspecialchars($currentUser['name']); ?> | 
+    <i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($currentUser['email']); ?> | 
+    <a href="logout.php" class="text-white text-decoration-underline"><i class="fas fa-sign-out-alt"></i> Logout</a></p>
+  </div>
+
+  <!-- Doctor Navigation -->
+  <ul class="nav nav-pills justify-content-center flex-wrap mb-4 gap-2" id="doctorNav">
+    <li class="nav-item"><a class="nav-link active" href="#" onclick="event.preventDefault(); showTab('home')"><i class="fas fa-home"></i> Home</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('patients')"><i class="fas fa-users"></i> My Patients</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('appointments')"><i class="fas fa-calendar-check"></i> Appointments</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('prescribe')"><i class="fas fa-prescription-bottle"></i> Prescribe</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('diagnose')"><i class="fas fa-stethoscope"></i> Diagnose</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('orders')"><i class="fas fa-flask"></i> Lab Orders</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('myLists')"><i class="fas fa-list-ul"></i> My Lists</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('messages')"><i class="fas fa-comments"></i> Messages <span id="unreadMsgBadge" class="ms-1"></span></a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('report')"><i class="fas fa-pen-fancy"></i> Weekly Report</a></li>
+  </ul>
+
+  <!-- Home Tab -->
+  <div id="tab-home">
+    <div class="row g-4">
+      <div class="col-md-3">
+        <div class="card home-card text-center p-4" onclick="showTab('patients')">
+          <i class="fas fa-users fa-4x text-primary mb-3"></i>
+          <h5>My Patients</h5>
+          <p class="text-muted small">View and manage your patients</p>
+          <button class="btn btn-primary" onclick="event.stopPropagation(); showTab('patients')">View Patients</button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card home-card text-center p-4" onclick="showTab('appointments')">
+          <i class="fas fa-calendar-check fa-4x text-success mb-3"></i>
+          <h5>Appointments</h5>
+          <p class="text-muted small">Manage your schedule</p>
+          <button class="btn btn-success" onclick="event.stopPropagation(); showTab('appointments')">View Schedule</button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card home-card text-center p-4" onclick="showTab('prescribe')">
+          <i class="fas fa-prescription-bottle fa-4x text-info mb-3"></i>
+          <h5>Prescribe</h5>
+          <p class="text-muted small">Write prescriptions</p>
+          <button class="btn btn-info" onclick="event.stopPropagation(); showTab('prescribe')">Write Prescription</button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card home-card text-center p-4" onclick="showTab('myLists')">
+          <i class="fas fa-list-ul fa-4x text-warning mb-3"></i>
+          <h5>My Lists</h5>
+          <p class="text-muted small">View all prescriptions, diagnoses & lab orders</p>
+          <button class="btn btn-warning" onclick="event.stopPropagation(); showTab('myLists')">View Lists</button>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-4">
+      <div class="col-md-4">
+        <div class="card home-card text-center p-4" onclick="showTab('diagnose')">
+          <i class="fas fa-stethoscope fa-4x text-danger mb-3"></i>
+          <h5>Diagnose</h5>
+          <p class="text-muted small">Record diagnoses</p>
+          <button class="btn btn-danger" onclick="event.stopPropagation(); showTab('diagnose')">Add Diagnosis</button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card home-card text-center p-4" onclick="showTab('orders')">
+          <i class="fas fa-flask fa-4x text-secondary mb-3"></i>
+          <h5>Lab Orders</h5>
+          <p class="text-muted small">Order laboratory tests</p>
+          <button class="btn btn-secondary" onclick="event.stopPropagation(); showTab('orders')">Order Test</button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card home-card text-center p-4" onclick="showTab('messages')">
+          <i class="fas fa-comments fa-4x text-primary mb-3"></i>
+          <h5>Messages</h5>
+          <p class="text-muted small">Communicate with patients</p>
+          <button class="btn btn-primary" onclick="event.stopPropagation(); showTab('messages')">Open Chat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Patients Tab -->
+  <div id="tab-patients" class="d-none">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="fas fa-users text-primary me-2"></i>My Patients</h4>
+        <button class="btn btn-pdf" onclick="exportPatientsListPDF()">
+          <i class="fas fa-file-pdf"></i> Export Patients PDF
+        </button>
+      </div>
+      <div class="search-box mb-3">
+        <i class="fas fa-search"></i>
+        <input type="text" id="patientSearch" class="form-control" placeholder="Search by name or email..." oninput="filterPatients()">
+      </div>
+      <div id="patientsList" class="row g-3"></div>
+    </div>
+  </div>
+
+  <!-- Appointments Tab -->
+  <div id="tab-appointments" class="d-none">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="fas fa-calendar-check text-success me-2"></i>My Appointments</h4>
+        <button class="btn btn-pdf" onclick="exportAppointmentsPDF()">
+          <i class="fas fa-file-pdf"></i> Export Appointments PDF
+        </button>
+      </div>
+      <div id="appointmentsList" class="row g-3"></div>
+    </div>
+  </div>
+
+  <!-- Prescribe Tab -->
+  <div id="tab-prescribe" class="d-none">
+    <div class="card p-4">
+      <h4 class="mb-3"><i class="fas fa-prescription-bottle text-info me-2"></i>Prescribe Medication</h4>
+      <div class="row g-3">
         <div class="col-md-6">
-            <div class="card p-3 record-item">
-                <h6 class="mb-1">${p.full_name}</h6>
-                <p class="small text-muted mb-1">${p.email}</p>
-                <p class="small mb-2">Visits: ${p.visit_count || 0}</p>
-                <div class="d-flex gap-2 mt-2">
-                    <button class="btn btn-sm btn-outline-primary" onclick="openPatientDetail('${p.email}')">View Records</button>
-                    <button class="btn btn-sm btn-outline-success" onclick="messagePatient('${p.email}')">Message</button>
-                </div>
-            </div>
+          <label class="form-label fw-bold">Select Patient *</label>
+          <select id="prescribePatient" class="form-select" onchange="loadPatientInfo(this.value)">
+            <option value="">-- Choose a patient --</option>
+          </select>
         </div>
-    `).join('');
-}
-
-function filterDoctorPatients() {
-    const q = document.getElementById('doctorPatientSearch')?.value || '';
-    const items = document.querySelectorAll('#doctorPatientsList .col-md-6');
-    items.forEach(item => {
-        const text = item.textContent.toLowerCase();
-        item.style.display = text.includes(q.toLowerCase()) ? '' : 'none';
-    });
-}
-
-async function openPatientDetail(patientEmail) {
-    const result = await apiCall('get_patient_history', { patient_email: patientEmail });
-    if (!result.success) {
-        alert('Failed to load patient records');
-        return;
-    }
-    
-    const content = document.getElementById('patientDetailContent');
-    if (!content) return;
-    
-    content.innerHTML = `
-        <div class="row">
-            <div class="col-12 mb-4">
-                <div class="card p-3">
-                    <h5><i class="fas fa-notes-medical"></i> Medical Records</h5>
-                    ${result.records && result.records.length > 0 ? result.records.map(r => `
-                        <div class="border-bottom py-2">
-                            <strong>${r.record_title}</strong><br>
-                            <small class="text-muted">${new Date(r.created_at).toLocaleDateString()}</small>
-                            <p class="mt-1">${r.record_description || 'No description'}</p>
-                        </div>
-                    `).join('') : '<p class="text-muted">No medical records</p>'}
-                </div>
-            </div>
-            <div class="col-12 mb-4">
-                <div class="card p-3">
-                    <h5><i class="fas fa-pills"></i> Prescriptions</h5>
-                    ${result.prescriptions && result.prescriptions.length > 0 ? result.prescriptions.map(p => `
-                        <div class="border-bottom py-2">
-                            <strong>${p.medication_name}</strong> - ${p.dosage || 'N/A'}<br>
-                            <small>Prescribed: ${new Date(p.created_at).toLocaleDateString()}</small>
-                            <p class="mt-1">${p.instructions || 'No instructions'}</p>
-                        </div>
-                    `).join('') : '<p class="text-muted">No prescriptions</p>'}
-                </div>
-            </div>
-            <div class="col-12">
-                <div class="card p-3">
-                    <h5><i class="fas fa-heartbeat"></i> Recent Vital Signs</h5>
-                    ${result.vitals && result.vitals.length > 0 ? result.vitals.map(v => `
-                        <div class="border-bottom py-2">
-                            <small>${new Date(v.recorded_at).toLocaleDateString()}</small><br>
-                            Temp: ${v.temperature}°C | BP: ${v.blood_pressure_systolic}/${v.blood_pressure_diastolic} | HR: ${v.heart_rate} | O2: ${v.oxygen_saturation}%
-                        </div>
-                    `).join('') : '<p class="text-muted">No vital signs recorded</p>'}
-                </div>
-            </div>
-        </div>
-        <div class="mt-3">
-            <button class="btn btn-primary" onclick="showTab('doctor-prescribe')">Write Prescription</button>
-            <button class="btn btn-info" onclick="showTab('doctor-diagnose')">Add Diagnosis</button>
-            <button class="btn btn-success" onclick="showTab('doctor-orders')">Order Tests</button>
-        </div>
-    `;
-    
-    showTab('doctor-patient-detail');
-}
-
-function messagePatient(patientEmail) {
-    currentChatWith = patientEmail;
-    showTab('doctor-messages');
-    setTimeout(() => loadMessageThread(patientEmail), 100);
-}
-
-async function renderDoctorAppointments() {
-    const el = document.getElementById('doctorAppointmentsList');
-    if (!el) return;
-    
-    const result = await apiCall('get_appointments', { email: currentUser.email, role: 'doctor' });
-    const appointments = result.appointments || [];
-    
-    if (appointments.length === 0) {
-        el.innerHTML = '<div class="col-12"><p class="text-muted">No appointments scheduled.</p></div>';
-        return;
-    }
-    
-    el.innerHTML = appointments.map(a => `
         <div class="col-md-6">
-            <div class="card p-3">
-                <h6 class="mb-1">${a.patient_name}</h6>
-                <p class="small mb-1"><strong>Date:</strong> ${a.appointment_date}</p>
-                <p class="small mb-1"><strong>Time:</strong> ${a.appointment_time}</p>
-                <p class="small mb-1"><strong>Type:</strong> ${a.type === 'tele' ? 'Teleconsult' : 'Clinic Visit'}</p>
-                <p class="small mb-1"><strong>Reason:</strong> ${a.reason || 'Not specified'}</p>
-                <div class="d-flex gap-2 mt-2">
-                    <span class="badge bg-${a.status === 'confirmed' ? 'success' : a.status === 'completed' ? 'info' : 'warning'}">${a.status || 'pending'}</span>
-                    ${a.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="confirmAppointment('${a.id}')">Confirm</button>` : ''}
-                    ${a.status === 'confirmed' ? `<button class="btn btn-sm btn-info" onclick="completeAppointment('${a.id}')">Complete</button>` : ''}
-                </div>
-            </div>
+          <label class="form-label fw-bold">Medication *</label>
+          <select id="prescribeMedicine" class="form-select">
+            <option value="">-- Select medication --</option>
+          </select>
         </div>
-    `).join('');
-}
-
-async function confirmAppointment(appointmentId) {
-    const result = await apiCall('confirm_appointment', { appointment_id: appointmentId });
-    if (result.success) {
-        alert('Appointment confirmed!');
-        renderDoctorAppointments();
-    } else {
-        alert('Failed to confirm appointment');
-    }
-}
-
-async function completeAppointment(appointmentId) {
-    const result = await apiCall('complete_appointment', { appointment_id: appointmentId });
-    if (result.success) {
-        alert('Appointment marked as completed!');
-        renderDoctorAppointments();
-    } else {
-        alert('Failed to complete appointment');
-    }
-}
-
-async function populatePrescribeSelects() {
-    const medSelect = document.getElementById('prescribeMedicineSelect');
-    const patientSelect = document.getElementById('prescribePatientSelect');
-    
-    const medications = [
-        { id: 'PARACETAMOL', name: "Paracetamol (Panadol) - 500mg" },
-        { id: 'ARTEMETHER', name: "Artemether/Lumefantrine - 20/120mg" },
-        { id: 'QUININE', name: "Quinine Sulfate - 300mg" },
-        { id: 'AMPICILLIN', name: "Ampicillin - 500mg" },
-        { id: 'AMOXICILLIN', name: "Amoxicillin - 500mg" },
-        { id: 'METFORMIN', name: "Metformin - 500mg" },
-        { id: 'ATENOLOL', name: "Atenolol - 50mg" },
-        { id: 'OMEPRAZOLE', name: "Omeprazole - 20mg" }
-    ];
-    
-    if (medSelect) medSelect.innerHTML = '<option value="">-- Choose Medicine --</option>' + medications.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
-    
-    const patientsResult = await apiCall('get_patients');
-    const patients = patientsResult.patients || [];
-    if (patientSelect) patientSelect.innerHTML = '<option value="">-- Choose Patient --</option>' + patients.map(p => `<option value="${p.email}" data-name="${p.name}">${p.name} (${p.email})</option>`).join('');
-}
-
-async function submitPrescription() {
-    const patientEmail = document.getElementById('prescribePatientSelect').value;
-    const medication = document.getElementById('prescribeMedicineSelect').value;
-    const dosage = document.getElementById('prescribeDosage').value;
-    const frequency = document.getElementById('prescribeFrequency').value;
-    const duration = document.getElementById('prescribeDuration').value;
-    const notes = document.getElementById('prescribeNotes').value;
-    
-    if (!patientEmail || !medication) {
-        alert('Please select patient and medicine');
-        return;
-    }
-    
-    const patientSelect = document.getElementById('prescribePatientSelect');
-    const patientName = patientSelect.options[patientSelect.selectedIndex]?.getAttribute('data-name') || '';
-    
-    const result = await apiCall('submit_prescription', {
-        patient_email: patientEmail,
-        patient_name: patientName,
-        doctor_email: currentUser.email,
-        doctor_name: currentUser.name,
-        medication: medication,
-        dosage: dosage,
-        frequency: frequency,
-        duration: duration,
-        instructions: notes
-    });
-    
-    if (result.success) {
-        alert('Prescription submitted successfully!');
-        document.getElementById('prescribeDosage').value = '';
-        document.getElementById('prescribeFrequency').value = '';
-        document.getElementById('prescribeDuration').value = '';
-        document.getElementById('prescribeNotes').value = '';
-    } else {
-        alert('Failed to submit prescription');
-    }
-}
-
-function populateDiagnoseSelects() {
-    const diagSelect = document.getElementById('diagnosisSelect');
-    const diseases = [
-        { id: 'MALARIA', name: "Malaria" },
-        { id: 'TB', name: "Tuberculosis" },
-        { id: 'HYPERTENSION', name: "Hypertension" },
-        { id: 'DIABETES', name: "Diabetes Mellitus" },
-        { id: 'PNEUMONIA', name: "Pneumonia" },
-        { id: 'TYPHOID', name: "Typhoid Fever" },
-        { id: 'UTI', name: "Urinary Tract Infection" },
-        { id: 'ASTHMA', name: "Asthma" }
-    ];
-    if (diagSelect) diagSelect.innerHTML = '<option value="">-- Choose Condition --</option>' + diseases.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
-    
-    const patientSelect = document.getElementById('diagnosePatientSelect');
-    if (patientSelect) {
-        apiCall('get_patients').then(result => {
-            const patients = result.patients || [];
-            patientSelect.innerHTML = '<option value="">-- Choose Patient --</option>' + patients.map(p => `<option value="${p.email}" data-name="${p.name}">${p.name}</option>`).join('');
-        });
-    }
-}
-
-function loadDiagnosePatientInfo() {
-    const select = document.getElementById('diagnosePatientSelect');
-    const infoDiv = document.getElementById('diagnosePatientInfo');
-    if (!select || !select.value || !infoDiv) return;
-    const option = select.options[select.selectedIndex];
-    const patientName = option.getAttribute('data-name') || '';
-    infoDiv.innerHTML = `<strong>${patientName}</strong> - Ready for diagnosis`;
-}
-
-async function submitDiagnosis() {
-    const patientEmail = document.getElementById('diagnosePatientSelect')?.value;
-    const diagnosis = document.getElementById('diagnosisSelect')?.value;
-    const notes = document.getElementById('diagnosisNotes')?.value;
-    const severity = document.getElementById('diagnosisSeverity')?.value;
-    
-    if (!patientEmail || !diagnosis) {
-        alert('Please select patient and diagnosis');
-        return;
-    }
-    
-    const patientSelect = document.getElementById('diagnosePatientSelect');
-    const patientName = patientSelect.options[patientSelect.selectedIndex]?.getAttribute('data-name') || '';
-    
-    const result = await apiCall('submit_diagnosis', {
-        patient_email: patientEmail,
-        patient_name: patientName,
-        doctor_email: currentUser.email,
-        doctor_name: currentUser.name,
-        diagnosis: diagnosis,
-        notes: notes,
-        severity: severity
-    });
-    
-    if (result.success) {
-        alert('Diagnosis saved successfully!');
-        document.getElementById('diagnosisNotes').value = '';
-        document.getElementById('diagnosisSeverity').value = '';
-        showTab('doctor-patients');
-    } else {
-        alert('Failed to save diagnosis');
-    }
-}
-
-function populateLabSelects() {
-    const labPatientSelect = document.getElementById('labPatientSelect');
-    const imagingPatientSelect = document.getElementById('imagingPatientSelect');
-    const consultPatientSelect = document.getElementById('consultPatientSelect');
-    
-    apiCall('get_patients').then(result => {
-        const patients = result.patients || [];
-        const options = '<option value="">-- Choose Patient --</option>' + patients.map(p => `<option value="${p.email}" data-name="${p.name}">${p.name}</option>`).join('');
-        if (labPatientSelect) labPatientSelect.innerHTML = options;
-        if (imagingPatientSelect) imagingPatientSelect.innerHTML = options;
-        if (consultPatientSelect) consultPatientSelect.innerHTML = options;
-    });
-}
-
-function loadLabTestOptions() {
-    // Placeholder for loading test options based on patient
-}
-
-async function orderLabTest() {
-    const patientEmail = document.getElementById('labPatientSelect')?.value;
-    const testType = document.getElementById('labTestType')?.value;
-    const indication = document.getElementById('labIndication')?.value;
-    
-    if (!patientEmail || !testType) {
-        alert('Please select patient and test type');
-        return;
-    }
-    
-    const result = await apiCall('order_lab_test', {
-        patient_email: patientEmail,
-        doctor_email: currentUser.email,
-        test_type: testType,
-        indication: indication
-    });
-    
-    if (result.success) {
-        alert('Lab test ordered successfully!');
-        document.getElementById('labIndication').value = '';
-    } else {
-        alert('Failed to order test');
-    }
-}
-
-function orderImaging() {
-    alert('Imaging study ordered successfully!');
-}
-
-function requestConsultation() {
-    alert('Consultation requested successfully!');
-}
-
-function goBackToPatients() { showTab('doctor-patients'); }
-</script>
-
-<!-- DOCTOR NAVIGATION -->
-<ul class="nav nav-pills justify-content-center flex-wrap mb-4 gap-2" id="doctorNav">
-    <li class="nav-item"><a class="nav-link active" href="#" onclick="event.preventDefault(); showTab('doctor-home')"><i class="fas fa-home"></i> Home</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('doctor-patients')"><i class="fas fa-users"></i> My Patients</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('doctor-appointments')"><i class="fas fa-calendar-check"></i> Schedule</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('doctor-prescribe')"><i class="fas fa-prescription-bottle"></i> Prescribe</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('doctor-diagnose')"><i class="fas fa-stethoscope"></i> Diagnose</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('doctor-orders')"><i class="fas fa-flask"></i> Lab Orders</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('doctor-messages')"><i class="fas fa-comments"></i> Messages</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('profile')"><i class="fas fa-user"></i> Profile</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="event.preventDefault(); showTab('staff-report')"><i class="fas fa-pen-fancy"></i> Weekly Report</a></li>
-</ul>
-
-<!-- DOCTOR HOME TAB -->
-<div id="tab-doctor-home" class="row g-4">
-    <div class="col-12"><div class="card p-4 bg-light"><h5><i class="fas fa-stethoscope"></i> Doctor Dashboard</h5><p class="text-muted">Manage your patients, schedule appointments, and submit reports.</p></div></div>
-    <div class="col-md-3"><div class="card h-100 text-center p-4"><i class="fas fa-users fa-3x text-primary mb-3"></i><h5>My Patients</h5><button class="btn btn-primary landing-action" data-action="doctor-patients">View Patients</button></div></div>
-    <div class="col-md-3"><div class="card h-100 text-center p-4"><i class="fas fa-calendar-check fa-3x text-success mb-3"></i><h5>Appointments</h5><button class="btn btn-success landing-action" data-action="doctor-appointments">View Schedule</button></div></div>
-    <div class="col-md-3"><div class="card h-100 text-center p-4"><i class="fas fa-prescription-bottle fa-3x text-info mb-3"></i><h5>Prescriptions</h5><button class="btn btn-info landing-action" data-action="doctor-prescribe">Prescribe</button></div></div>
-    <div class="col-md-3"><div class="card h-100 text-center p-4"><i class="fas fa-comments fa-3x text-warning mb-3"></i><h5>Messages</h5><button class="btn btn-warning landing-action" data-action="doctor-messages">Chat</button></div></div>
-</div>
-
-<!-- DOCTOR PATIENTS TAB -->
-<div id="tab-doctor-patients" class="d-none card p-4">
-    <h4><i class="fas fa-users"></i> My Patients</h4>
-    <input type="text" id="doctorPatientSearch" class="form-control mb-3" placeholder="Search patients..." oninput="filterDoctorPatients()">
-    <div id="doctorPatientsList" class="row g-3"></div>
-</div>
-
-<!-- DOCTOR PATIENT DETAIL TAB -->
-<div id="tab-doctor-patient-detail" class="d-none card p-4">
-    <h4><i class="fas fa-user-circle"></i> Patient Medical Record</h4>
-    <div class="card p-3 mb-4 bg-light"><button class="btn btn-sm btn-outline-secondary" onclick="goBackToPatients()">← Back to Patients</button></div>
-    <div id="patientDetailContent"></div>
-</div>
-
-<!-- DOCTOR APPOINTMENTS TAB -->
-<div id="tab-doctor-appointments" class="d-none card p-4">
-    <h4><i class="fas fa-calendar-check"></i> My Appointment Schedule</h4>
-    <div id="doctorAppointmentsList" class="row g-3"></div>
-</div>
-
-<!-- DOCTOR PRESCRIBE TAB -->
-<div id="tab-doctor-prescribe" class="d-none card p-4">
-    <h4><i class="fas fa-prescription-bottle"></i> Prescribe Medication</h4>
-    <div class="card p-3 mb-4">
-        <div class="row g-3">
-            <div class="col-md-6"><label class="form-label">Select Patient</label><select id="prescribePatientSelect" class="form-select mb-2"><option value="">-- Choose Patient --</option></select></div>
-            <div class="col-md-6"><label class="form-label">Select Medication</label><select id="prescribeMedicineSelect" class="form-select mb-2"><option value="">-- Choose Medicine --</option></select></div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Dosage</label>
+          <input type="text" id="dosage" class="form-control" placeholder="e.g., 500mg">
         </div>
-        <div class="row g-3">
-            <div class="col-md-4"><label class="form-label">Dosage</label><input type="text" id="prescribeDosage" class="form-control" placeholder="e.g., 500mg"></div>
-            <div class="col-md-4"><label class="form-label">Frequency</label><input type="text" id="prescribeFrequency" class="form-control" placeholder="e.g., 3x daily"></div>
-            <div class="col-md-4"><label class="form-label">Duration (days)</label><input type="number" id="prescribeDuration" class="form-control" placeholder="e.g., 7"></div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Frequency</label>
+          <input type="text" id="frequency" class="form-control" placeholder="e.g., 3x daily">
         </div>
-        <textarea id="prescribeNotes" class="form-control mt-3" rows="2" placeholder="Additional instructions..."></textarea>
-        <button class="btn btn-primary mt-3 w-100" onclick="submitPrescription()"><i class="fas fa-save"></i> Submit Prescription</button>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Duration (days)</label>
+          <input type="number" id="duration" class="form-control" placeholder="Number of days">
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-bold">Instructions</label>
+          <textarea id="instructions" class="form-control" rows="3" placeholder="Additional instructions for the patient..."></textarea>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-success w-100" onclick="submitPrescription()">
+            <i class="fas fa-prescription-bottle me-2"></i>Submit Prescription
+          </button>
+        </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- DOCTOR DIAGNOSE TAB -->
-<div id="tab-doctor-diagnose" class="d-none card p-4">
-    <h4><i class="fas fa-stethoscope"></i> Diagnose Patient</h4>
-    <div class="card p-3 mb-4">
-        <div class="row g-3">
-            <div class="col-md-6"><label class="form-label">Select Patient</label><select id="diagnosePatientSelect" class="form-select mb-2" onchange="loadDiagnosePatientInfo()"><option value="">-- Choose Patient --</option></select><div id="diagnosePatientInfo" class="small text-muted mt-2"></div></div>
-            <div class="col-md-6"><label class="form-label">Select Disease/Condition</label><select id="diagnosisSelect" class="form-select mb-2"><option value="">-- Choose Condition --</option></select></div>
+  <!-- Diagnose Tab -->
+  <div id="tab-diagnose" class="d-none">
+    <div class="card p-4">
+      <h4 class="mb-3"><i class="fas fa-stethoscope text-danger me-2"></i>Diagnose Patient</h4>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Select Patient *</label>
+          <select id="diagnosePatient" class="form-select">
+            <option value="">-- Choose a patient --</option>
+          </select>
         </div>
-        <div class="mb-3"><label class="form-label">Findings & Observations</label><textarea id="diagnosisNotes" class="form-control" rows="3" placeholder="Document clinical findings, symptoms, test results..."></textarea></div>
-        <div class="mb-3"><label class="form-label">Severity Level</label><select id="diagnosisSeverity" class="form-select"><option value="">-- Select Severity --</option><option value="mild">Mild</option><option value="moderate">Moderate</option><option value="severe">Severe</option><option value="critical">Critical</option></select></div>
-        <button class="btn btn-primary w-100" onclick="submitDiagnosis()"><i class="fas fa-save"></i> Save Diagnosis</button>
-    </div>
-</div>
-
-<!-- DOCTOR ORDERS TAB -->
-<div id="tab-doctor-orders" class="d-none card p-4">
-    <h4><i class="fas fa-flask"></i> Order Tests & Consultations</h4>
-    <div class="card p-3 mb-4">
-        <ul class="nav nav-tabs mb-3" id="ordersTabs">
-            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#labTests">Lab Tests</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#imagingStudies">Imaging</a></li>
-            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#consultations">Consultations</a></li>
-        </ul>
-        <div class="tab-content">
-            <div id="labTests" class="tab-pane fade show active">
-                <div class="row g-3"><div class="col-md-6"><label class="form-label">Select Patient</label><select id="labPatientSelect" class="form-select" onchange="loadLabTestOptions()"><option value="">-- Choose Patient --</option></select></div><div class="col-md-6"><label class="form-label">Test Type</label><select id="labTestType" class="form-select"><option value="">-- Choose Test --</option><option value="Full Blood Count (FBC)">Full Blood Count (FBC)</option><option value="Malaria RDT">Malaria RDT Test</option><option value="Fasting Blood Sugar">Fasting Blood Sugar (FBS)</option><option value="Lipid Profile">Lipid Profile</option><option value="Liver Function Tests">Liver Function Tests</option><option value="Kidney Function Tests">Kidney Function Tests</option><option value="HIV Rapid Test">HIV Rapid Test</option><option value="TB Sputum">TB Sputum Smear</option><option value="Typhoid Serology">Typhoid Serology</option><option value="Urinalysis">Urinalysis</option></select></div></div>
-                <div class="mt-3"><label class="form-label">Clinical Indication</label><textarea id="labIndication" class="form-control" rows="2" placeholder="Why is this test needed?"></textarea></div>
-                <button class="btn btn-primary mt-3 w-100" onclick="orderLabTest()"><i class="fas fa-flask"></i> Order Lab Test</button>
-            </div>
-            <div id="imagingStudies" class="tab-pane fade">
-                <div class="row g-3"><div class="col-md-6"><label class="form-label">Select Patient</label><select id="imagingPatientSelect" class="form-select"><option value="">-- Choose Patient --</option></select></div><div class="col-md-6"><label class="form-label">Imaging Type</label><select id="imagingType" class="form-select"><option value="">-- Choose Imaging --</option><option value="X-Ray">X-Ray</option><option value="Ultrasound">Ultrasound</option><option value="CT Scan">CT Scan</option><option value="MRI">MRI</option><option value="ECG">ECG</option></select></div></div>
-                <div class="mt-3"><label class="form-label">Clinical Indication</label><textarea id="imagingIndication" class="form-control" rows="2" placeholder="Reason for imaging study..."></textarea></div>
-                <button class="btn btn-primary mt-3 w-100" onclick="orderImaging()"><i class="fas fa-image"></i> Order Imaging Study</button>
-            </div>
-            <div id="consultations" class="tab-pane fade">
-                <div class="row g-3"><div class="col-md-6"><label class="form-label">Select Patient</label><select id="consultPatientSelect" class="form-select"><option value="">-- Choose Patient --</option></select></div><div class="col-md-6"><label class="form-label">Specialty Required</label><select id="consultSpecialty" class="form-select"><option value="">-- Choose Specialty --</option><option value="Cardiology">Cardiology (Heart)</option><option value="Neurology">Neurology (Nerves)</option><option value="Surgery">General Surgery</option><option value="Orthopedics">Orthopedics (Bones)</option><option value="Gynecology">Obstetrics & Gynecology</option><option value="Pediatrics">Pediatrics (Children)</option></select></div></div>
-                <div class="mt-3"><label class="form-label">Reason for Consultation</label><textarea id="consultReason" class="form-control" rows="2" placeholder="Clinical reason for specialist consultation..."></textarea></div>
-                <button class="btn btn-primary mt-3 w-100" onclick="requestConsultation()"><i class="fas fa-user-md"></i> Request Consultation</button>
-            </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Diagnosis *</label>
+          <select id="diagnosis" class="form-select">
+            <option value="">-- Select diagnosis --</option>
+          </select>
         </div>
+        <div class="col-12">
+          <label class="form-label fw-bold">Notes / Treatment Plan</label>
+          <textarea id="diagnosisNotes" class="form-control" rows="3" placeholder="Detailed notes about diagnosis and treatment..."></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Severity</label>
+          <select id="severity" class="form-select">
+            <option>Mild</option>
+            <option>Moderate</option>
+            <option>Severe</option>
+            <option>Critical</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-danger w-100" onclick="submitDiagnosis()">
+            <i class="fas fa-save me-2"></i>Save Diagnosis
+          </button>
+        </div>
+      </div>
     </div>
+  </div>
+
+  <!-- Orders Tab -->
+  <div id="tab-orders" class="d-none">
+    <div class="card p-4">
+      <h4 class="mb-3"><i class="fas fa-flask text-secondary me-2"></i>Order Laboratory Tests</h4>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Select Patient *</label>
+          <select id="orderPatient" class="form-select">
+            <option value="">-- Choose a patient --</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Test Type *</label>
+          <select id="testType" class="form-select">
+            <option value="">-- Select test --</option>
+            <option>Complete Blood Count (CBC)</option>
+            <option>Malaria Test (RDT)</option>
+            <option>Blood Glucose Test</option>
+            <option>Urinalysis</option>
+            <option>Liver Function Test</option>
+            <option>Kidney Function Test</option>
+            <option>Thyroid Function Test</option>
+            <option>COVID-19 Test</option>
+            <option>Typhoid Test</option>
+            <option>HIV Test</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-bold">Clinical Indication</label>
+          <textarea id="indication" class="form-control" rows="3" placeholder="Reason for ordering this test..."></textarea>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-secondary w-100" onclick="orderLabTest()">
+            <i class="fas fa-flask me-2"></i>Order Test
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Lists Tab -->
+  <div id="tab-myLists" class="d-none">
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="card list-card">
+          <div class="list-card-header">
+            <i class="fas fa-prescription-bottle me-2"></i>My Prescriptions
+            <span class="badge bg-light text-dark ms-2" id="prescriptionCount">0</span>
+            <button class="btn btn-sm btn-light float-end" onclick="exportPrescriptionsPDF()" style="font-size: 12px;"><i class="fas fa-file-pdf text-danger"></i> PDF</button>
+          </div>
+          <div class="list-card-body" id="prescriptionsList">
+            <div class="text-center p-3 text-muted">Loading prescriptions...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card list-card">
+          <div class="list-card-header">
+            <i class="fas fa-stethoscope me-2"></i>My Diagnoses
+            <span class="badge bg-light text-dark ms-2" id="diagnosisCount">0</span>
+            <button class="btn btn-sm btn-light float-end" onclick="exportDiagnosesPDF()" style="font-size: 12px;"><i class="fas fa-file-pdf text-danger"></i> PDF</button>
+          </div>
+          <div class="list-card-body" id="diagnosesList">
+            <div class="text-center p-3 text-muted">Loading diagnoses...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card list-card">
+          <div class="list-card-header">
+            <i class="fas fa-flask me-2"></i>My Lab Orders
+            <span class="badge bg-light text-dark ms-2" id="labOrderCount">0</span>
+            <button class="btn btn-sm btn-light float-end" onclick="exportLabOrdersPDF()" style="font-size: 12px;"><i class="fas fa-file-pdf text-danger"></i> PDF</button>
+          </div>
+          <div class="list-card-body" id="labOrdersList">
+            <div class="text-center p-3 text-muted">Loading lab orders...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card mt-4 p-3">
+      <div class="row">
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Filter by Patient</label>
+          <select id="listPatientFilter" class="form-select" onchange="loadMyLists()">
+            <option value="">All Patients</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Filter by Date</label>
+          <input type="date" id="listDateFilter" class="form-control" onchange="loadMyLists()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Messages Tab -->
+  <div id="tab-messages" class="d-none">
+    <div class="card p-4">
+      <h4 class="mb-3"><i class="fas fa-comments text-warning me-2"></i>Messages with Patients</h4>
+      
+      <!-- Patient Selection Dropdown -->
+      <div class="mb-3">
+        <label class="form-label fw-bold"><i class="fas fa-user-md me-1"></i>Select Patient to Chat With:</label>
+        <div class="input-group">
+          <select id="patientChatSelect" class="form-select" onchange="selectPatientToChat()">
+            <option value="">-- Select a patient --</option>
+          </select>
+          <button class="btn btn-success" onclick="startNewChat()" id="startChatBtn" disabled>
+            <i class="fas fa-comment-dots"></i> Start Chat
+          </button>
+        </div>
+        <small class="text-muted">Select a patient from your list to start or continue a conversation</small>
+      </div>
+      
+      <hr>
+      
+      <div class="row">
+        <div class="col-md-4 border-end">
+          <h6 class="mb-3"><i class="fas fa-history"></i> Recent Conversations</h6>
+          <div id="conversationsList" class="list-group" style="max-height: 400px; overflow-y: auto;">
+            <div class="text-center text-muted p-3">Loading conversations...</div>
+          </div>
+        </div>
+        <div class="col-md-8">
+          <div id="currentChatPatient" class="alert alert-info mb-2 d-none">
+            <i class="fas fa-user-circle me-2"></i>Chatting with: <strong id="currentChatPatientName"></strong> (<span id="currentChatPatientEmail"></span>)
+          </div>
+          <div id="messageThread" class="border rounded p-3" style="height: 400px; overflow-y: auto; background-color: #f8f9fa;">
+            <div class="text-center text-muted p-5">Select a patient from the dropdown or click on a conversation to start messaging</div>
+          </div>
+          <div class="input-group mt-3">
+            <input type="text" id="messageInput" class="form-control" placeholder="Type your message..." disabled onkeypress="if(event.key==='Enter') sendDoctorMessage()">
+            <button class="btn btn-warning" onclick="sendDoctorMessage()" disabled id="sendMsgBtn">
+              <i class="fas fa-paper-plane"></i> Send
+            </button>
+          </div>
+          <div class="small text-muted mt-2">
+            <i class="fas fa-lock"></i> Your messages are secure and encrypted
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Tab -->
+  <div id="tab-report" class="d-none">
+    <div class="card p-4">
+      <h4 class="mb-3"><i class="fas fa-pen-fancy text-primary me-2"></i>Weekly Report</h4>
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>Submit your weekly activities report for review by the admin.
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Week Starting *</label>
+          <input type="date" id="reportWeek" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Patients Attended *</label>
+          <input type="number" id="patientsAttended" class="form-control" placeholder="Number of patients">
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-bold">Activities Performed</label>
+          <textarea id="activities" class="form-control" rows="4" placeholder="Describe your activities this week..."></textarea>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-bold">Challenges Faced</label>
+          <input type="text" id="challenges" class="form-control" placeholder="Any challenges or issues?">
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary w-100" onclick="submitReport()">
+            <i class="fas fa-paper-plane me-2"></i>Submit Report
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- DOCTOR MESSAGING TAB -->
-<div id="tab-doctor-messages" class="d-none card p-4">
-    <h4><i class="fas fa-comments"></i> Secure Messaging</h4>
-    <div class="row g-3">
-        <div class="col-md-4"><div class="card p-3"><h6>Conversations</h6><div id="messagesList" class="list-group" style="max-height: 400px; overflow-y: auto;"><p class="text-muted small">No conversations yet</p></div></div></div>
-        <div class="col-md-8"><div class="card p-3"><h6 id="messageThreadTitle">Select a conversation</h6><div id="messageThread" class="bg-light p-3 rounded mb-3" style="min-height: 300px; max-height: 400px; overflow-y: auto;"><p class="text-muted small">Select a conversation to view messages</p></div><div class="input-group"><textarea id="messageInput" class="form-control" rows="2" placeholder="Type your message..." disabled></textarea><button class="btn btn-primary" id="sendMessageBtn" onclick="sendMessage()" disabled><i class="fas fa-paper-plane"></i> Send</button></div></div></div>
+<!-- Patient Details Modal -->
+<div class="modal fade" id="patientModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="fas fa-user-circle me-2"></i>Patient Details</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="patientModalBody">
+        Loading...
+      </div>
     </div>
+  </div>
 </div>
+
+</body>
+</html>
